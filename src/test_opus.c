@@ -386,10 +386,11 @@ int main(int argc, char *argv[])
               {
             	  write_samples = output_samples-skip;
             	  tot_written += write_samples*channels;
+            	  /* disabled because repacketizer produces packets that break this assumption
             	  if (tot_written > tot_read)
             	  {
             		  write_samples -= (tot_written-tot_read)/channels;
-            	  }
+            	  }*/
             	  fwrite(out+skip, sizeof(short), write_samples*channels, fout);
             	  skip = 0;
               }
@@ -397,11 +398,12 @@ int main(int argc, char *argv[])
       }
 
       /* compare final range encoder rng values of encoder and decoder */
+      /* disabled because repacketizer does not preserve range coder state
       if( !encode_only && !lost && !lost_prev
          && opus_decoder_get_final_range( dec ) != enc_final_range[toggle^use_inbandfec] ) {
           fprintf (stderr, "Error: Range coder state mismatch between encoder and decoder in frame %d.\n", count);
           return 0;
-      }
+      } */
 
       lost_prev = lost;
 

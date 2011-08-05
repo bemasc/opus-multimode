@@ -1,4 +1,5 @@
 OPUS_HEAD = \
+src/repacketizer.h \
 src/opus_decoder.h \
 src/opus_encoder.h \
 src/opus.h
