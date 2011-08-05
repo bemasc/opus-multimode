@@ -418,6 +418,7 @@ int opus_decode(OpusDecoder *st, const unsigned char *data,
 	int i, bytes, nb_samples;
 	int count;
 	unsigned char ch, toc;
+	int multimode=0;
 	/* 48 x 2.5 ms = 120 ms */
 	short size[48];
 	if (len==0 || data==NULL)
@@ -460,8 +461,14 @@ int opus_decode(OpusDecoder *st, const unsigned char *data,
 			return OPUS_CORRUPTED_DATA;
 		/* Number of frames encoded in bits 0 to 5 */
 		ch = *data++;
+		if (ch == 49)  /* 49 is a reserved value indicating multimode */
+		{ 
+			multimode = 1;
+			len--;
+			ch = *data++; /* In multimode the next byte is the real ch */
+		}
 		count = ch&0x3F;
-		if (count <= 0 || st->frame_size*count*25 > 3*st->Fs)
+		if (count <= 0 || (!multimode && st->frame_size*count*25 > 3*st->Fs))
 		    return OPUS_CORRUPTED_DATA;
 		len--;
 		/* Padding flag is bit 6 */
@@ -478,6 +485,9 @@ int opus_decode(OpusDecoder *st, const unsigned char *data,
 			} while (p==255);
 			len -= padding;
 		}
+		/* Account for the extra count-1 TOC bytes in multimode */
+		if (multimode)
+			len -= count-1;
 		if (len<0)
 			return OPUS_CORRUPTED_DATA;
 		/* VBR flag is bit 7 */
@@ -513,13 +523,25 @@ int opus_decode(OpusDecoder *st, const unsigned char *data,
 	   Reject them here.*/
 	if (size[count-1] > MAX_PACKET)
 		return OPUS_CORRUPTED_DATA;
-	if (count*st->frame_size > frame_size)
+	if (!multimode && count*st->frame_size > frame_size)
 		return OPUS_BAD_ARG;
 	nb_samples=0;
 	for (i=0;i<count;i++)
 	{
 		int ret;
-		ret = opus_decode_frame(st, data, size[i], pcm, frame_size-nb_samples, decode_fec);
+		/* Multimode only affects the second and subsequent frames */
+		if (multimode && i > 0)
+		{
+			if (*data&0x3 != 0) /* Subpackets in multimode must have Code 0 */
+				return OPUS_CORRUPTED_DATA;
+			/* Add 1 byte to size, to account for the TOC byte */
+			ret = opus_decode(st, data, size[i]+1, pcm, frame_size-nb_samples, decode_fec);
+			/* Move the pointer past the TOC byte */
+			data++; 
+		} else
+		{
+			ret = opus_decode_frame(st, data, size[i], pcm, frame_size-nb_samples, decode_fec);
+		}
 		if (ret<0)
 			return ret;
 		data += size[i];
